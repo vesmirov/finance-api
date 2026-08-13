@@ -1,0 +1,12 @@
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      # idiomatic deferred closes and writes to test ResponseWriters
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (*database/sql.Rows).Close
+        - (net/http.ResponseWriter).Write
+        - (*github.com/vesmirov/finance-api/internal/store.Store).Close
