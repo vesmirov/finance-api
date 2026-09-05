@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euo pipefail
+
+STACK=/mnt/vault/finance/stack
+
+if ! mountpoint -q /mnt/vault; then
+    echo "/mnt/vault is not mounted, nothing to stop" >&2
+    exit 0
+fi
+
+cd "$STACK"
+docker compose down
