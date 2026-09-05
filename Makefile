@@ -1,18 +1,15 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS  = -ldflags "-s -w -X main.version=$(VERSION)"
 
-.PHONY: up down dev test lint build release clean db-up
+.PHONY: up down dev test lint build clean
 
-up:            ## the whole stack in containers: web + api + db
+up:            ## the whole stack in containers: web + api
 	docker compose up -d --build --wait
 
 down:
 	docker compose down
 
-db-up:         ## DB only (for go run and tests)
-	docker compose up -d --wait db
-
-dev: db-up     ## fast iteration: DB in a container, API via go run
+dev:           ## fast iteration: API via go run, database in ./finance.db
 	go run ./cmd/finance
 
 test:
@@ -23,9 +20,6 @@ lint:
 
 build:
 	go build $(LDFLAGS) -o dist/finance ./cmd/finance
-
-release:
-	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build $(LDFLAGS) -o dist/finance-linux-arm64 ./cmd/finance
 
 clean:
 	rm -rf dist

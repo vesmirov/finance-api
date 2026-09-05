@@ -5,18 +5,15 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8090:80"
+      - "127.0.0.1:8090:8080"
     restart: unless-stopped
 
   api:
     build: .
-    depends_on:
-      db:
-        condition: service_healthy
     environment:
-      # inside the compose network — the db service on the standard 5432
-      FINANCE_DB: postgres://finance:finance@db:5432/finance?sslmode=disable
       FINANCE_RATES_REFRESH: ${FINANCE_RATES_REFRESH:-5m}
+    volumes:
+      - data:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
@@ -24,23 +21,5 @@ services:
       timeout: 3s
       retries: 10
 
-  db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: finance
-      POSTGRES_PASSWORD: finance
-      POSTGRES_DB: finance
-    ports:
-      # exposed only for host tools (go run, tests, psql);
-      # host port 5433 — 5432 on this machine is taken by an unrelated postgres_test (OrbStack)
-      - "127.0.0.1:5433:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finance -d finance"]
-      interval: 2s
-      timeout: 2s
-      retries: 15
-
 volumes:
-  pgdata:
+  data:

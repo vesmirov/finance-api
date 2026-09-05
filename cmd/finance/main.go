@@ -1,11 +1,11 @@
 // finance — the budget planner API.
 //
-//	finance [-addr 127.0.0.1:8080] [-db <postgres-dsn>]    run the server
-//	finance admin create [-login X]                        create an admin (asks for a password)
-//	finance admin password [-login X]                      change a password (revokes sessions)
+//	finance [-addr 127.0.0.1:8080] [-db <path>]    run the server
+//	finance admin create [-login X]                create an admin (asks for a password)
+//	finance admin password [-login X]              change a password (revokes sessions)
 //
-// DSN: the -db flag, else env FINANCE_DB, else the local docker compose
-// (postgres://finance:finance@127.0.0.1:5433/finance).
+// Database file: the -db flag, else env FINANCE_DB, else ./finance.db.
+// It is created on first start; migrations run automatically.
 package main
 
 import (
@@ -38,20 +38,20 @@ func main() {
 
 	fs := flag.NewFlagSet("finance", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:8080", "listen address")
-	dbDSN := fs.String("db", "", "postgres DSN (default: env FINANCE_DB or local docker compose)")
+	dbPath := fs.String("db", "", "SQLite database file (default: env FINANCE_DB or ./finance.db)")
 	login := fs.String("login", "", "user login (finance admin ...)")
 	adminPassword := fs.String("password", "", "admin password for scripting (finance admin ...); interactive input is safer")
 	_ = fs.Parse(args)
 
-	dsn := *dbDSN
-	if dsn == "" {
-		dsn = os.Getenv("FINANCE_DB")
+	path := *dbPath
+	if path == "" {
+		path = os.Getenv("FINANCE_DB")
 	}
-	if dsn == "" {
-		dsn = "postgres://finance:finance@127.0.0.1:5433/finance?sslmode=disable"
+	if path == "" {
+		path = "finance.db"
 	}
 
-	st, err := store.Open(dsn)
+	st, err := store.Open(path)
 	if err != nil {
 		log.Error("open db", "err", err)
 		os.Exit(1)
