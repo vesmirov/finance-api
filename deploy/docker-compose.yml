@@ -1,0 +1,44 @@
+services:
+  api:
+    image: ghcr.io/vesmirov/finance-api:v0.1.0
+    container_name: finance-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GOGC: "20"
+    volumes:
+      - /mnt/vault/finance/data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 64m
+    memswap_limit: 64m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    image: ghcr.io/vesmirov/finance-web:v0.1.0
+    container_name: finance-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 32m
+    memswap_limit: 32m

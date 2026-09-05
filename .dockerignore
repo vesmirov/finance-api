@@ -1,4 +1,9 @@
 .git
+.github
 dist
 deploy
 *.md
+*.db
+*.db-wal
+*.db-shm
+.env

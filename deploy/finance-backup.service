@@ -1,8 +1,0 @@
-[Unit]
-Description=Finance PostgreSQL backup (pg_dump from the compose container)
-After=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=/opt/finance
-ExecStart=/bin/sh -c 'mkdir -p /opt/finance/backups && docker compose exec -T db pg_dump -U finance finance | gzip > /opt/finance/backups/finance-$(date +%%F).sql.gz && ls -1t /opt/finance/backups/finance-*.sql.gz | tail -n +15 | xargs -r rm'

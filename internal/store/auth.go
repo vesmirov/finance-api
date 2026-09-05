@@ -76,7 +76,7 @@ func (s *Store) UpdateUser(id int64, fields map[string]any) error {
 		return nil
 	}
 	// users are not owner-scoped: reuse the generic builder with a no-op condition
-	return s.update(id, "users", `$%d::bigint = id`, id, fields, userColumns)
+	return s.update(id, "users", `id = $%d`, id, fields, userColumns)
 }
 
 func (s *Store) DeleteUser(id int64) error {
@@ -85,27 +85,28 @@ func (s *Store) DeleteUser(id int64) error {
 
 func (s *Store) CountAdmins() (int, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM users WHERE is_admin`).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM users WHERE is_admin = 1`).Scan(&n)
 	return n, err
 }
 
-// ── sessions ────────────────────────────────────────────────────────────────
+// ── sessions (expires_at is a Unix timestamp in seconds) ────────────────────
 
 func (s *Store) CreateSession(tokenHash string, userID int64, expiresAt time.Time) error {
 	_, err := s.db.Exec(
 		`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)`,
-		tokenHash, userID, expiresAt)
+		tokenHash, userID, expiresAt.Unix())
 	return err
 }
 
 // SessionUser returns the user of a live session; expired ones are cleaned up
 // along the way.
 func (s *Store) SessionUser(tokenHash string) (*User, error) {
-	_, _ = s.db.Exec(`DELETE FROM sessions WHERE expires_at < now()`)
+	now := time.Now().Unix()
+	_, _ = s.db.Exec(`DELETE FROM sessions WHERE expires_at < $1`, now)
 	var userID int64
 	err := s.db.QueryRow(
-		`SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at >= now()`,
-		tokenHash).Scan(&userID)
+		`SELECT user_id FROM sessions WHERE token_hash = $1 AND expires_at >= $2`,
+		tokenHash, now).Scan(&userID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

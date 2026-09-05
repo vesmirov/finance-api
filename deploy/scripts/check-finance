@@ -1,0 +1,40 @@
+#!/bin/bash
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+MOUNT=/mnt/vault
+STACK=/mnt/vault/finance/stack
+LOCAL=http://127.0.0.1:8090
+URL=$(grep -E "^FINANCE_URL=" "$STACK/.env" 2>/dev/null | cut -d= -f2-)
+
+if mountpoint -q "$MOUNT"; then
+    echo -e "${GREEN}[OK]${NC} $MOUNT is mounted"
+else
+    echo -e "${RED}[ERROR]${NC} $MOUNT is not mounted"
+    exit 1
+fi
+
+echo ""
+cd "$STACK" && docker compose ps --format "table {{.Name}}\t{{.Status}}"
+
+echo ""
+check() {
+    local label=$1 url=$2 want=$3
+    local code
+    code=$(curl -s -o /dev/null -m 10 -w "%{http_code}" "$url" 2>/dev/null)
+    if [ "$code" = "$want" ]; then
+        echo -e "${GREEN}[OK]${NC} $label ($code)"
+    else
+        echo -e "${RED}[ERROR]${NC} $label returned $code, expected $want"
+    fi
+}
+
+check "api health via web" "$LOCAL/api/health" 200
+check "web root" "$LOCAL/" 200
+check "api rejects anonymous" "$LOCAL/api/plan" 401
+if [ -n "$URL" ]; then
+    check "tailnet health" "$URL/api/health" 200
+    check "tailnet root" "$URL/" 200
+fi

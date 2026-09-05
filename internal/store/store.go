@@ -1,4 +1,4 @@
-// Package store — the SQL layer on top of PostgreSQL: connection, migrations,
+// Package store — the SQL layer on top of SQLite: connection, migrations,
 // queries. Money and percents are stored as decimal strings (TEXT); no
 // arithmetic happens here. All plan data is scoped by user.
 package store
@@ -8,11 +8,13 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
-	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	_ "modernc.org/sqlite"
 )
 
 //go:embed migrations/*.sql
@@ -26,21 +28,36 @@ type Store struct {
 	db *sql.DB
 }
 
-// Open connects to PostgreSQL (DSN like postgres://user:pass@host:5432/db).
-// Ping retries: the docker compose database may start slower than the app.
-func Open(dsn string) (*Store, error) {
-	db, err := sql.Open("pgx", dsn)
+// Open opens (or creates) the SQLite database file at path; a missing parent
+// directory is created. Every connection gets WAL journaling, a busy timeout
+// and foreign-key enforcement (the schema relies on ON DELETE CASCADE).
+// A single pooled connection serialises writers, so "database is locked"
+// never surfaces; every query in this package consumes its rows before the
+// next one runs, which that requires.
+func Open(path string) (*Store, error) {
+	if path == "" {
+		return nil, errors.New("database path is empty")
+	}
+	abs, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
-	var pingErr error
-	for i := 0; i < 20; i++ {
-		if pingErr = db.Ping(); pingErr == nil {
-			return &Store{db: db}, nil
-		}
-		time.Sleep(250 * time.Millisecond)
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("postgres is not reachable: %w", pingErr)
+	// url.URL percent-encodes '%', '?' and '#' in the path, which SQLite's
+	// URI parser would otherwise interpret.
+	dsn := url.URL{Scheme: "file", Path: abs, RawQuery: "_busy_timeout=5000&_foreign_keys=1&_journal_mode=WAL"}
+	db, err := sql.Open("sqlite", dsn.String())
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("open %s: %w", abs, err)
+	}
+	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -48,7 +65,7 @@ func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Migrate() error {
 	goose.SetBaseFS(migrationsFS)
 	goose.SetLogger(goose.NopLogger())
-	if err := goose.SetDialect("postgres"); err != nil {
+	if err := goose.SetDialect("sqlite3"); err != nil {
 		return err
 	}
 	return goose.Up(s.db, "migrations")

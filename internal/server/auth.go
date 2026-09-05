@@ -33,21 +33,31 @@ func newToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
+// isHTTPS reports whether the client reached us over TLS, either directly or
+// through a reverse proxy that terminates it and forwards X-Forwarded-Proto.
+// The api is never exposed directly, so the header is set by our own proxy.
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+// The Secure flag follows the request's scheme: set behind the TLS proxy,
+// omitted for plain-http development so the browser keeps the cookie.
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
 		Value:    token,
 		Path:     "/",
 		Expires:  expires,
 		HttpOnly: true,
+		Secure:   isHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func (s *Server) clearSessionCookie(w http.ResponseWriter) {
+func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/", MaxAge: -1,
-		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -82,7 +92,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Server) startSession(w http.ResponseWriter, userID int64) error {
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {
 	token, err := newToken()
 	if err != nil {
 		return err
@@ -91,7 +101,7 @@ func (s *Server) startSession(w http.ResponseWriter, userID int64) error {
 	if err := s.st.CreateSession(hashToken(token), userID, expires); err != nil {
 		return err
 	}
-	s.setSessionCookie(w, token, expires)
+	s.setSessionCookie(w, r, token, expires)
 	return nil
 }
 
@@ -118,7 +128,7 @@ func (s *Server) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "invalid login or password")
 		return
 	}
-	if err := s.startSession(w, u.ID); err != nil {
+	if err := s.startSession(w, r, u.ID); err != nil {
 		s.storeErr(w, err)
 		return
 	}
@@ -130,7 +140,7 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
 		_ = s.st.DeleteSession(hashToken(c.Value))
 	}
-	s.clearSessionCookie(w)
+	s.clearSessionCookie(w, r)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 

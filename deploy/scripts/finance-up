@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+
+MOUNT=/mnt/vault
+STACK=/mnt/vault/finance/stack
+
+if ! mountpoint -q "$MOUNT"; then
+    echo "$MOUNT is not mounted (run vault-open first)" >&2
+    exit 1
+fi
+
+cd "$STACK"
+docker compose up -d
+docker compose ps
