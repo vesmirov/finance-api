@@ -80,7 +80,9 @@ sets the `Secure` cookie flag from it.
 - `finance-update`: `docker compose pull`, `up -d`, prune old images. Change
   the tags in `docker-compose.yml` first; tags are pinned on purpose.
 - `check-finance`: mount, container status, health and sign-in guard through
-  the web container, and through `FINANCE_URL` from `.env` if set.
+  the web container. The private-network address cannot be checked from the
+  host itself (`tailscale serve` does not answer the local node), open it
+  from another device.
 
 ### Data
 
