@@ -1,3 +1,5 @@
+name: finance
+
 services:
   api:
     image: ghcr.io/vesmirov/finance-api:v0.1.0
